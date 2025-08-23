@@ -37,7 +37,7 @@ Then edit `config.json` with your settings:
   "searchLocations": [
     {
       "postcode": "5000",
-      "state": "SA", 
+      "state": "SA",
       "name": "Adelaide CBD"
     },
     {
