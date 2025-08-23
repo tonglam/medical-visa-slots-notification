@@ -1,0 +1,47 @@
+{
+  "searchLocations": [
+    {
+      "postcode": "5000",
+      "state": "SA",
+      "name": "Adelaide CBD"
+    },
+    {
+      "postcode": "3000",
+      "state": "VIC",
+      "name": "Melbourne CBD"
+    },
+    {
+      "postcode": "2000",
+      "state": "NSW",
+      "name": "Sydney CBD"
+    }
+  ],
+  "crawlerSettings": {
+    "baseUrl": "https://bmvs.onlineappointmentscheduling.net.au/",
+    "timeout": 30000,
+    "headless": true
+  },
+  "placesToNotify": [
+    {
+      "locationName": "Adelaide",
+      "state": "SA"
+    },
+    {
+      "locationName": "Melbourne",
+      "state": "VIC"
+    }
+  ],
+  "existingSlot": {
+    "locationName": "Perth",
+    "date": "2025-12-31",
+    "time": "9:00 AM"
+  },
+  "expectedSlot": {
+    "locationName": "Adelaide",
+    "date": "2025-10-15"
+  },
+  "onlyBetterSlots": true,
+  "email": {
+    "to": ["your-email@example.com", "another-email@example.com"]
+  }
+}

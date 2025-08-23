@@ -1,0 +1,13 @@
+# Email Configuration for Medical Visa Slots Notification
+# Copy this file to config.ini and fill in your values
+
+[email]
+# Get your API key from: https://resend.com/api-keys
+resend_api_key = your_resend_api_key_here
+enabled = true
+from = your_email@example.com
+subject = 🏥 Medical Visa Slots Available!
+
+# Optional: Add other email-related configurations here
+# smtp_host = smtp.resend.com
+# smtp_port = 587
