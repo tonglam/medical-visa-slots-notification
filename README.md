@@ -1,17 +1,17 @@
 # Medical Visa Slots Notification System
 
-**Automated monitoring service** that checks Australian medical visa appointment availability every 5 minutes and sends email notifications when slots matching your criteria are found.
+**Automated monitoring service** that checks Australian medical visa appointment availability and sends email notifications when slots matching your criteria are found.
 
 ## ✨ Key Features
 
-- 🤖 **Automated Monitoring**: Runs every 5 minutes (configurable)
+- 🤖 **Automated Monitoring**: Configurable checking intervals
 - 📧 **Smart Email Alerts**: Only sends emails when relevant slots are available
 - 🔗 **Direct Booking Links**: Emails include clickable links with pre-filled search parameters
-- 🛡️ **Reliable**: Built-in retry logic, error recovery, and production logging
 - 📍 **Multi-Location**: Monitor multiple cities/postcodes simultaneously
 - 🎯 **Smart Filtering**: Filter by location, better slots, and preferences
+- 🛡️ **Reliable**: Built-in retry logic, error recovery, and logging
 
-## 🚀 Quick Start
+## 🚀 Quick Start (macOS)
 
 ### 1. Installation
 
@@ -24,13 +24,14 @@ bunx puppeteer browsers install chrome
 
 ### 2. Configuration
 
-Copy the sample configuration and customize it:
+Copy and customize the configuration:
 
 ```bash
 cp config.sample.json config.json
+cp config.ini.sample config.ini
 ```
 
-Then edit `config.json` with your settings:
+**Edit `config.json`** with your search preferences:
 
 ```json
 {
@@ -39,11 +40,6 @@ Then edit `config.json` with your settings:
       "postcode": "5000",
       "state": "SA",
       "name": "Adelaide CBD"
-    },
-    {
-      "postcode": "3000",
-      "state": "VIC",
-      "name": "Melbourne CBD"
     }
   ],
   "placesToNotify": [
@@ -52,27 +48,13 @@ Then edit `config.json` with your settings:
       "state": "SA"
     }
   ],
-  "existingSlot": {
-    "locationName": "Perth",
-    "date": "2025-12-31",
-    "time": "9:00 AM"
-  },
-  "onlyBetterSlots": true,
   "email": {
     "to": ["your-email@example.com"]
   }
 }
 ```
 
-### 3. Email Setup
-
-Copy the sample email config and add your API key:
-
-```bash
-cp config.ini.sample config.ini
-```
-
-Edit `config.ini`:
+**Edit `config.ini`** with your email API key:
 
 ```ini
 [email]
@@ -82,259 +64,115 @@ from = noreply@yourdomain.com
 subject = 🏥 Medical Visa Slots Available!
 ```
 
-**Get Resend API Key**: Sign up at [resend.com](https://resend.com) → API Keys → Create API Key
+Get your API key from [resend.com/api-keys](https://resend.com/api-keys)
 
-### 4. Test Configuration
+### 3. Test the System
 
 ```bash
 # Test email setup
 bun run test-email
 
-# Test crawler (make sure config.json is set up first)
-bun run start --single
+# Test crawler (visible browser)
+bun run visible
+
+# Test complete workflow
+bun run crawl-and-notify
 ```
 
-### 5. Start Monitoring
+## 🔄 Automated Monitoring
+
+### Set up automated checking with cron:
 
 ```bash
-# Start automated monitoring (5-minute intervals)
-bun run service
+# Open crontab
+crontab -e
 
-# Background mode (no console output)
-bun run service-daemon
+# Add one of these lines:
 
-# Custom interval
-bun run service --interval 3
+# Check every 15 minutes
+*/15 * * * * /path/to/medical-visa-slots-notification/run-check-macos.sh
+
+# Check every 30 minutes
+*/30 * * * * /path/to/medical-visa-slots-notification/run-check-macos.sh
+
+# Check every hour
+0 * * * * /path/to/medical-visa-slots-notification/run-check-macos.sh
 ```
 
-## ⚙️ Configuration Guide
-
-### Search Locations
-
-Add postcodes/states you want to monitor:
-
-```json
-"searchLocations": [
-  { "postcode": "5000", "state": "SA", "name": "Adelaide CBD" },
-  { "postcode": "3000", "state": "VIC", "name": "Melbourne CBD" },
-  { "postcode": "2000", "state": "NSW", "name": "Sydney CBD" },
-  { "postcode": "4000", "state": "QLD", "name": "Brisbane CBD" }
-]
-```
-
-**Available States**: SA, VIC, NSW, QLD, WA, TAS, NT, ACT
-
-### Notification Filters
-
-Control when you receive notifications:
-
-```json
-"placesToNotify": [
-  {
-    "locationName": "Adelaide",     // Partial name match
-    "state": "SA",                  // State filter
-    "maxDistance": "100 km"         // Maximum distance
-  }
-],
-"existingSlot": {
-  "locationName": "Perth",
-  "date": "2025-09-12"              // Only notify if earlier than this
-},
-"onlyBetterSlots": true             // Only notify for better/expected slots
-```
-
-### Email Configuration
-
-**Secure settings** in `config.ini`:
-
-- `resend_api_key`: Your Resend API key
-- `enabled`: true/false to enable/disable emails
-- `from`: Your verified sender email
-- `subject`: Email subject line
-
-**Recipients** in `config.json`:
-
-```json
-"email": {
-  "to": ["email1@example.com", "email2@example.com"]
-}
-```
-
-## 🔄 Deployment
-
-### Production Deployment
-
-#### Option 1: macOS (launchd)
-
-Create `~/Library/LaunchAgents/com.medical-visa-service.plist`:
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.medical-visa-service</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/usr/local/bin/bun</string>
-        <string>run</string>
-        <string>src/service.ts</string>
-        <string>--daemon</string>
-    </array>
-    <key>WorkingDirectory</key>
-    <string>/full/path/to/medical-visa-slots-notification</string>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-</dict>
-</plist>
-```
-
-Start the service:
+### View cron logs:
 
 ```bash
-launchctl load ~/Library/LaunchAgents/com.medical-visa-service.plist
-launchctl start com.medical-visa-service
+tail -f logs/cron-macos.log
 ```
 
-#### Option 2: Linux (systemd)
-
-Create `/etc/systemd/system/medical-visa-service.service`:
-
-```ini
-[Unit]
-Description=Medical Visa Slots Monitoring Service
-After=network.target
-
-[Service]
-Type=simple
-User=your-username
-WorkingDirectory=/full/path/to/medical-visa-slots-notification
-ExecStart=/usr/local/bin/bun run src/service.ts --daemon
-Restart=always
-RestartSec=10
-Environment=NODE_ENV=production
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Start the service:
+## 🧰 Available Commands
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable medical-visa-service
-sudo systemctl start medical-visa-service
-
-# Check status
-sudo systemctl status medical-visa-service
+bun run start        # Run crawler once (headless)
+bun run visible      # Run crawler with visible browser
+bun run check        # Same as start
+bun run notify       # Send notifications for existing results
+bun run crawl-and-notify  # Full workflow
+bun run test-email   # Test email configuration
+bun run cron         # Run the cron script manually
 ```
 
-#### Option 3: Simple Background Process
+## 📊 How It Works
+
+1. **Crawls** the medical visa booking website for available appointments
+2. **Filters** results based on your location and slot preferences
+3. **Compares** with your existing booking (if configured)
+4. **Sends email** only when better/relevant slots are found
+5. **Saves results** to JSON files for tracking
+
+## 🔧 Configuration Options
+
+### Smart Filtering
+
+- **`onlyBetterSlots`**: Only notify about slots better than your existing booking
+- **`existingSlot`**: Your current booking details for comparison
+- **`expectedSlot`**: Preferred slot criteria
+
+### Email Settings
+
+- **`to`**: Array of email addresses to notify
+- **`from`**: Sender email (must be verified with Resend)
+- **`enabled`**: Enable/disable email notifications
+
+## 📝 Logs and Results
+
+- **`logs/`**: Application logs by date
+- **`logs/cron-macos.log`**: Automated checking logs
+- **`latest-medical-visa-results.json`**: Latest crawl results
+- **`notification-result.json`**: Latest notification analysis
+
+## 🐛 Troubleshooting
+
+**Browser/Puppeteer issues:**
 
 ```bash
-# Start in background
-nohup bun run service-daemon > /dev/null 2>&1 &
-
-# Or with logging
-nohup bun run service-daemon >> service.log 2>&1 &
+bunx puppeteer browsers install chrome
 ```
 
-### Monitoring & Logs
+**Email not working:**
 
-**Production logs** are written to `logs/` directory:
+- Verify your Resend API key
+- Check sender email is verified with Resend
+- Run `bun run test-email`
 
-- `logs/info-YYYY-MM-DD.log` - Service activity
-- `logs/error-YYYY-MM-DD.log` - Errors (when they occur)
+**Cron not running:**
 
-**Generated files**:
+- Check cron logs: `tail -f logs/cron-macos.log`
+- Verify script permissions: `chmod +x run-check-macos.sh`
+- Test manually: `./run-check-macos.sh`
 
-- `latest-medical-visa-results.json` - Latest crawler results
-- `notification-result.json` - Filtered notification results
+## 📚 Example Use Cases
 
-**Check service status** (interactive mode):
-
-```bash
-bun run service
-# Press 's' + Enter for status
-# Press 'q' + Enter to quit
-```
-
-## 📧 Email Features
-
-When relevant slots are found, you'll receive emails with:
-
-- **📍 Complete slot details**: Location, address, distance, availability time
-- **🔗 Direct booking links**: Pre-filled with postcode/state for quick booking
-- **📋 Search context**: Which search area found each slot
-- **🆔 Location IDs**: For reference and tracking
-- **📝 Booking instructions**: Step-by-step guide
-
-## 🛠️ Commands Reference
-
-```bash
-# Service (Automated Monitoring)
-bun run service                    # Start monitoring (5-min intervals)
-bun run service-daemon             # Background mode
-bun run service --interval 10      # Custom interval (10 minutes)
-bun run service --config my.json   # Custom config file
-
-# Manual Commands (One-time checks)
-bun run start                      # Multi-location search
-bun run start --single             # Single location (legacy)
-bun run start --visible            # Show browser (debugging)
-
-# Testing
-bun run test-email                 # Test email configuration
-bun run check                      # Quick crawler test
-```
-
-## 🔧 Troubleshooting
-
-**Service won't start:**
-
-- Check `config.json` and `config.ini` exist and are valid
-- Verify file permissions and paths
-- Test individual components first
-
-**No emails received:**
-
-- Run `bun run test-email` to verify email setup
-- Check your notification criteria aren't too restrictive
-- Verify Resend API key is correct and has quota remaining
-
-**Browser errors:**
-
-- Install Puppeteer Chrome: `bunx puppeteer browsers install chrome`
-- Check network connectivity
-- Try `--visible` flag for debugging
-
-**High resource usage:**
-
-- Increase interval: `--interval 10` (10 minutes)
-- Reduce search locations in config
-- Monitor logs for errors causing retries
-
-## 📊 Performance
-
-- **Memory**: ~100-200MB during crawling, ~50MB idle
-- **CPU**: High during 30-60s crawler runs, minimal between checks
-- **Network**: ~1-5MB per check (depends on locations)
-- **Reliability**: Auto-retry with exponential backoff
-
-## 🔒 Security
-
-- **Never commit `config.ini`** (contains API key) - already in `.gitignore`
-- **Logs directory** excluded from git
-- **Credentials sanitized** in logs automatically
-- **Rate limiting** built-in to respect target website
-
-## ⚖️ License & Disclaimer
-
-This tool is for monitoring appointment availability only. Use responsibly and in accordance with the website's terms of service. The automated service includes respectful delays and error handling.
+- Monitor for earlier appointment slots in your preferred city
+- Track multiple cities when you're flexible about location
+- Get notified about last-minute cancellations
+- Set up "better slot" alerts to upgrade your existing booking
 
 ---
 
-**🎯 Need help?** Check the logs in `logs/` directory or test individual components with the manual commands above.
+**⚠️ Disclaimer**: This tool is for personal use only. Please use responsibly and respect the booking website's terms of service.

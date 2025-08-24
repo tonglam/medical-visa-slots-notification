@@ -1,25 +1,17 @@
 {
   "name": "medical-visa-slots-notification",
   "version": "1.0.0",
-  "description": "For aus medical visa slots notifications",
+  "description": "Automated Australian medical visa appointment monitoring for macOS",
   "main": "src/index.ts",
   "type": "module",
   "scripts": {
     "start": "bun run src/index.ts",
-    "dev": "bun run src/index.ts --visible",
-    "check": "bun run src/index.ts",
-    "single": "bun run src/index.ts --single",
-    "config": "bun run src/index.ts --config config.json",
     "visible": "bun run src/index.ts --visible",
+    "check": "bun run src/index.ts",
     "notify": "bun run src/notification-runner.ts",
-    "notify-config": "bun run src/notification-runner.ts --config config.json",
     "crawl-and-notify": "bun run src/index.ts && bun run src/notification-runner.ts",
     "test-email": "bun run src/test-email.ts",
-    "test-email-config": "bun run src/test-email.ts --config config.json",
-    "service": "bun run src/service.ts",
-    "service-daemon": "bun run src/service.ts --daemon",
-    "service-custom": "bun run src/service.ts --interval 10",
-    "service-config": "bun run src/service.ts --config config.json --interval 5"
+    "cron": "./run-check-macos.sh"
   },
   "dependencies": {
     "ini": "^5.0.0",
