@@ -19,7 +19,7 @@
 git clone <repository-url>
 cd medical-visa-slots-notification
 bun install
-bunx playwright install chromium
+bunx puppeteer browsers install chrome
 ```
 
 ### 2. Configuration
@@ -307,7 +307,7 @@ bun run check                      # Quick crawler test
 
 **Browser errors:**
 
-- Install Playwright: `bunx playwright install chromium`
+- Install Puppeteer Chrome: `bunx puppeteer browsers install chrome`
 - Check network connectivity
 - Try `--visible` flag for debugging
 

@@ -1,6 +1,6 @@
 import { readFileSync } from "fs";
 import { join } from "path";
-import { Browser, chromium, Page } from "playwright";
+import puppeteer, { Browser, HTTPRequest, HTTPResponse, Page } from "puppeteer";
 import { log } from "./logger";
 import type {
   AppConfig,
@@ -44,52 +44,70 @@ export class MedicalVisaCrawler {
 
   async initialize(): Promise<void> {
     log.progress("Initializing browser...");
-    this.browser = await chromium.launch({
-      headless: this.config.headless,
+
+    // Simplified browser launch for better compatibility
+    this.browser = await puppeteer.launch({
+      headless: this.config.headless ? "new" : false,
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      defaultViewport: {
+        width: 1280,
+        height: 720,
+      },
     });
+
+    log.progress("Creating new page...");
     this.page = await this.browser.newPage();
 
-    // Set timeout and user agent
+    // Set timeout
     this.page.setDefaultTimeout(this.config.timeout);
-    await this.page.setExtraHTTPHeaders({
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-    });
+
+    // Set user agent
+    await this.page.setUserAgent(
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    );
+
+    log.success("Browser initialized successfully");
   }
 
   async visitInitialPage(): Promise<void> {
     if (!this.page) throw new Error("Browser not initialized");
 
     log.info(`🌐 Visiting initial page: ${this.config.baseUrl}`);
-    await this.page.goto(this.config.baseUrl, { waitUntil: "networkidle" });
 
-    // Wait for page to load completely
-    await this.page.waitForLoadState("domcontentloaded");
-    log.success("Initial page loaded");
+    try {
+      await this.page.goto(this.config.baseUrl, {
+        waitUntil: "networkidle2",
+        timeout: this.config.timeout,
+      });
 
-    // Check if we're on a session expired page
-    const title = await this.page.title();
-    if (
-      title.toLowerCase().includes("session has expired") ||
-      title.toLowerCase().includes("expired")
-    ) {
-      log.warning(
-        "Session expired detected, trying to navigate to fresh session..."
-      );
+      // Wait for page to load completely
+      await this.page.waitForSelector("body", { timeout: 10000 });
+      log.success("Initial page loaded");
 
-      // Try to start a new session by going to the base URL
-      await this.page.goto(
-        "https://bmvs.onlineappointmentscheduling.net.au/oasis/",
-        { waitUntil: "networkidle" }
-      );
-      await this.page.waitForLoadState("domcontentloaded");
+      // Check if we're on a session expired page
+      const title = await this.page.title();
+      if (
+        title.toLowerCase().includes("session has expired") ||
+        title.toLowerCase().includes("expired")
+      ) {
+        log.warning(
+          "Session expired detected, trying to navigate to fresh session..."
+        );
 
-      const newTitle = await this.page.title();
-      log.info(`🔄 New page title: ${newTitle}`);
+        // Try to start a new session by going to the base URL
+        await this.page.goto(
+          "https://bmvs.onlineappointmentscheduling.net.au/oasis/",
+          { waitUntil: "networkidle2", timeout: this.config.timeout }
+        );
+
+        await this.page.waitForSelector("body", { timeout: 10000 });
+        const newTitle = await this.page.title();
+        log.info(`🔄 New page title: ${newTitle}`);
+      }
+    } catch (error) {
+      log.failure("Failed to visit initial page:", error);
+      throw error;
     }
-
-    // Successfully loaded the page
   }
 
   async clickIndividualBookingButton(): Promise<void> {
@@ -97,32 +115,39 @@ export class MedicalVisaCrawler {
 
     log.info('🔍 Looking for "New Individual booking" button...');
 
-    // Wait for the button to be present
-    const buttonSelector = "button#ContentPlaceHolder1_btnInd";
-    await this.page.waitForSelector(buttonSelector, { timeout: 10000 });
+    try {
+      // Wait for the button to be present
+      const buttonSelector = "button#ContentPlaceHolder1_btnInd";
+      await this.page.waitForSelector(buttonSelector, { timeout: 15000 });
 
-    // Log request/response details for debugging
-    this.page.on("request", (request) => {
-      if (request.url().includes("Location.aspx")) {
-        log.debug(`📤 Request: ${request.method()} ${request.url()}`);
-        log.debug("📤 Headers:", request.headers());
-      }
-    });
+      // Enhanced debugging for requests
+      this.page.on("request", (request: HTTPRequest) => {
+        if (request.url().includes("Location.aspx")) {
+          log.debug(`📤 Request: ${request.method()} ${request.url()}`);
+        }
+      });
 
-    this.page.on("response", (response) => {
-      if (response.url().includes("Location.aspx")) {
-        log.debug(`📥 Response: ${response.status()} ${response.url()}`);
-        log.debug("📥 Headers:", response.headers());
-      }
-    });
+      this.page.on("response", (response: HTTPResponse) => {
+        if (response.url().includes("Location.aspx")) {
+          log.debug(`📥 Response: ${response.status()} ${response.url()}`);
+        }
+      });
 
-    // Click the button
-    log.info('👆 Clicking "New Individual booking" button...');
-    await this.page.click(buttonSelector);
+      // Click the button with retry mechanism
+      log.info('👆 Clicking "New Individual booking" button...');
+      await this.page.click(buttonSelector);
 
-    // Wait for navigation to complete
-    await this.page.waitForLoadState("networkidle");
-    log.success("Successfully clicked button and loaded location page");
+      // Wait for navigation to complete with better error handling
+      await this.page.waitForNavigation({
+        waitUntil: "networkidle2",
+        timeout: this.config.timeout,
+      });
+
+      log.success("Successfully clicked button and loaded location page");
+    } catch (error) {
+      log.failure("Failed to click individual booking button:", error);
+      throw error;
+    }
   }
 
   async performLocationSearch(searchLocation?: SearchLocation): Promise<void> {
@@ -136,20 +161,27 @@ export class MedicalVisaCrawler {
     log.info(`🔍 Performing location search for ${locationName}...`);
 
     try {
-      // Fill in the postcode field
+      // Fill in the postcode field with improved error handling
       const postcodeField = await this.page.$(
         "input#ContentPlaceHolder1_SelectLocation1_txtSuburb"
       );
       if (postcodeField) {
         log.debug(`📮 Setting postcode to ${postcode}...`);
+
         // Clear the field first
-        await this.page.fill(
+        await this.page.evaluate((selector: string) => {
+          const element = document.querySelector(selector) as HTMLInputElement;
+          if (element) {
+            element.value = "";
+            element.dispatchEvent(new Event("input", { bubbles: true }));
+          }
+        }, "input#ContentPlaceHolder1_SelectLocation1_txtSuburb");
+
+        // Type the postcode
+        await this.page.type(
           "input#ContentPlaceHolder1_SelectLocation1_txtSuburb",
-          ""
-        );
-        await this.page.fill(
-          "input#ContentPlaceHolder1_SelectLocation1_txtSuburb",
-          postcode
+          postcode,
+          { delay: 50 }
         );
         await this.page.waitForTimeout(500);
       }
@@ -160,7 +192,7 @@ export class MedicalVisaCrawler {
       );
       if (stateDropdown) {
         log.debug(`📍 Setting state to ${state}...`);
-        await this.page.selectOption(
+        await this.page.select(
           "select#ContentPlaceHolder1_SelectLocation1_ddlState",
           state
         );
@@ -176,14 +208,20 @@ export class MedicalVisaCrawler {
         log.debug(
           `🎯 Clicking search button with selector: ${searchButtonSelector}`
         );
-        await this.page.click(searchButtonSelector);
 
-        // Wait for search results to load
-        await this.page.waitForLoadState("networkidle");
+        // Use Promise.all to wait for navigation and click simultaneously
+        await Promise.all([
+          this.page.waitForNavigation({
+            waitUntil: "networkidle2",
+            timeout: this.config.timeout,
+          }),
+          this.page.click(searchButtonSelector),
+        ]);
+
         log.success("Search completed, waiting for results...");
 
         // Wait a bit more for dynamic content to load
-        await this.page.waitForTimeout(3000);
+        await this.page.waitForTimeout(2000);
       } else {
         log.warning(
           "Search button not found, trying to proceed without search..."
@@ -206,68 +244,77 @@ export class MedicalVisaCrawler {
     // Check if we need to perform a search first
     await this.performLocationSearch(searchLocation);
 
-    // Wait for location table to load
-    await this.page.waitForSelector("tr.trlocation", { timeout: 15000 });
+    try {
+      // Wait for location table to load with better error handling
+      await this.page.waitForSelector("tr.trlocation", { timeout: 20000 });
 
-    // Extract all location rows
-    const locations = await this.page.$$eval("tr.trlocation", (rows) => {
-      return rows.map((row) => {
-        const checkbox = row.querySelector(
-          "input.rbLocation"
-        ) as HTMLInputElement;
-        const nameLabel = row.querySelector(".tdlocNameTitle") as HTMLElement;
-        const addressSpan = row.querySelector(
-          ".tdloc_name span"
-        ) as HTMLElement;
-        const distanceSpan = row.querySelector(
-          ".td-distance span"
-        ) as HTMLElement;
-        const availabilitySpan = row.querySelector(
-          ".tdloc_availability span"
-        ) as HTMLElement;
+      // Extract all location rows with optimized evaluation
+      const locations = await this.page.evaluate(() => {
+        const rows = Array.from(document.querySelectorAll("tr.trlocation"));
+        return rows.map((row) => {
+          const checkbox = row.querySelector(
+            "input.rbLocation"
+          ) as HTMLInputElement;
+          const nameLabel = row.querySelector(".tdlocNameTitle") as HTMLElement;
+          const addressSpan = row.querySelector(
+            ".tdloc_name span"
+          ) as HTMLElement;
+          const distanceSpan = row.querySelector(
+            ".td-distance span"
+          ) as HTMLElement;
+          const availabilitySpan = row.querySelector(
+            ".tdloc_availability span"
+          ) as HTMLElement;
 
-        const id = checkbox?.value || "";
-        const name = nameLabel?.textContent?.trim() || "";
-        const fullAddress = addressSpan?.textContent?.trim() || "";
-        const distance = distanceSpan?.textContent?.trim() || "";
-        const availability = availabilitySpan?.textContent?.trim() || "";
+          const id = checkbox?.value || "";
+          const name = nameLabel?.textContent?.trim() || "";
+          const fullAddress = addressSpan?.textContent?.trim() || "";
+          const distance = distanceSpan?.textContent?.trim() || "";
+          const availability = availabilitySpan?.textContent?.trim() || "";
 
-        // Parse address to get the full name (first line typically contains the center name)
-        const addressLines = fullAddress
-          .split("\n")
-          .map((line) => line.trim())
-          .filter((line) => line);
-        const fullName = addressLines[0] || name;
-        const address = addressLines.slice(1).join(", ");
+          // Parse address to get the full name (first line typically contains the center name)
+          const addressLines = fullAddress
+            .split("\n")
+            .map((line) => line.trim())
+            .filter((line) => line);
+          const fullName = addressLines[0] || name;
+          const address = addressLines.slice(1).join(", ");
 
-        const isAvailable = !availability
-          .toLowerCase()
-          .includes("no available");
+          const isAvailable = !availability
+            .toLowerCase()
+            .includes("no available");
 
-        return {
-          id,
-          name,
-          fullName,
-          address,
-          distance,
-          availability,
-          isAvailable,
-        };
+          return {
+            id,
+            name,
+            fullName,
+            address,
+            distance,
+            availability,
+            isAvailable,
+          };
+        });
       });
-    });
 
-    // Add search location information to each extracted location
-    const locationsWithSearchInfo = locations.map((location) => ({
-      ...location,
-      searchLocation,
-    }));
+      // Add search location information to each extracted location
+      const locationsWithSearchInfo = locations.map((location: any) => ({
+        ...location,
+        searchLocation,
+      }));
 
-    log.success(
-      `Extracted ${locations.length} locations for ${
-        searchLocation?.name || "default search"
-      }`
-    );
-    return locationsWithSearchInfo;
+      log.success(
+        `Extracted ${locations.length} locations for ${
+          searchLocation?.name || "default search"
+        }`
+      );
+      return locationsWithSearchInfo;
+    } catch (error) {
+      log.failure(
+        `Failed to extract location data for ${locationName}:`,
+        error
+      );
+      throw error;
+    }
   }
 
   async performSingleSearch(
@@ -292,6 +339,8 @@ export class MedicalVisaCrawler {
   async crawlMultiple(
     searchLocations: SearchLocation[]
   ): Promise<CrawlerResult> {
+    const startTime = Date.now();
+
     try {
       await this.initialize();
       await this.visitInitialPage();
@@ -300,15 +349,24 @@ export class MedicalVisaCrawler {
       const searchResults: SearchResult[] = [];
       const allLocations: LocationData[] = [];
 
-      for (const searchLocation of searchLocations) {
-        const searchResult = await this.performSingleSearch(searchLocation);
-        searchResults.push(searchResult);
-        allLocations.push(...searchResult.locations);
+      for (const [index, searchLocation] of searchLocations.entries()) {
+        try {
+          const searchResult = await this.performSingleSearch(searchLocation);
+          searchResults.push(searchResult);
+          allLocations.push(...searchResult.locations);
 
-        // Add a small delay between searches to be respectful
-        if (searchLocation !== searchLocations[searchLocations.length - 1]) {
-          log.info("⏳ Waiting before next search...");
-          await this.page?.waitForTimeout(2000);
+          // Add a small delay between searches to be respectful (reduced from 2000ms to 1000ms)
+          if (index < searchLocations.length - 1) {
+            log.info("⏳ Waiting before next search...");
+            await this.page?.waitForTimeout(1000);
+          }
+        } catch (error) {
+          log.failure(
+            `Failed to search location ${searchLocation.name}:`,
+            error
+          );
+          // Continue with other locations instead of failing completely
+          continue;
         }
       }
 
@@ -323,20 +381,29 @@ export class MedicalVisaCrawler {
         availableLocations
       );
 
+      const endTime = Date.now();
+      const duration = (endTime - startTime) / 1000;
+      log.success(`🎯 Crawling completed in ${duration.toFixed(2)} seconds`);
+
       return {
-        timestamp: new Date().toISOString(), // UTC timestamp
+        timestamp: new Date().toISOString(),
         searchResults,
         locations: allLocations,
         availableLocations,
         notAvailableLocations,
         message,
       };
+    } catch (error) {
+      log.failure("Crawling failed:", error);
+      throw error;
     } finally {
       await this.cleanup();
     }
   }
 
   async crawl(): Promise<CrawlerResult> {
+    const startTime = Date.now();
+
     try {
       await this.initialize();
       await this.visitInitialPage();
@@ -362,14 +429,21 @@ export class MedicalVisaCrawler {
 
       const message = this.formatMessage(locations, availableLocations);
 
+      const endTime = Date.now();
+      const duration = (endTime - startTime) / 1000;
+      log.success(`🎯 Crawling completed in ${duration.toFixed(2)} seconds`);
+
       return {
-        timestamp: new Date().toISOString(), // UTC timestamp
+        timestamp: new Date().toISOString(),
         searchResults: [searchResult],
         locations,
         availableLocations,
         notAvailableLocations,
         message,
       };
+    } catch (error) {
+      log.failure("Crawling failed:", error);
+      throw error;
     } finally {
       await this.cleanup();
     }

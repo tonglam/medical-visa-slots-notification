@@ -48,9 +48,9 @@ print_status "Installing application dependencies..."
 bun install
 print_success "Dependencies installed"
 
-print_status "Installing Playwright browsers..."
-bunx playwright install chromium
-print_success "Playwright browsers installed"
+print_status "Installing Puppeteer browsers..."
+bunx puppeteer browsers install chrome
+print_success "Puppeteer browsers installed"
 
 print_status "Creating configuration files..."
 if [ ! -f "config.json" ]; then

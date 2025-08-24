@@ -139,11 +139,11 @@ bun run test-email
 bun run start --single
 ```
 
-**Browser/Playwright issues?**
+**Browser/Puppeteer issues?**
 
 ```bash
-# Reinstall Playwright
-bunx playwright install chromium --with-deps
+# Reinstall Puppeteer
+bunx puppeteer browsers install chrome
 ```
 
 **Permission errors?**
