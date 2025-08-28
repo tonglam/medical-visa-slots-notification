@@ -45,15 +45,36 @@ export class MedicalVisaCrawler {
   async initialize(): Promise<void> {
     log.progress("Initializing browser...");
 
-    // Simplified browser launch for better compatibility
-    this.browser = await puppeteer.launch({
+    // Enhanced browser launch configuration for macOS compatibility
+    const launchOptions: any = {
       headless: this.config.headless ? "new" : false,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-accelerated-2d-canvas",
+        "--no-first-run",
+        "--no-zygote",
+        "--disable-gpu",
+      ],
       defaultViewport: {
         width: 1280,
         height: 720,
       },
-    });
+    };
+
+    // Specify Chrome executable path for macOS
+    if (process.platform === "darwin") {
+      launchOptions.executablePath =
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+    }
+
+    try {
+      this.browser = await puppeteer.launch(launchOptions);
+    } catch (error) {
+      log.failure("Failed to launch browser:", error);
+      throw new Error(`Browser launch failed: ${error}`);
+    }
 
     log.progress("Creating new page...");
     this.page = await this.browser.newPage();
